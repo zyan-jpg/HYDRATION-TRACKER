@@ -1,0 +1,1597 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hydration Tracker</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #e0f7fa, #cdd8f1);
+            color: #333;
+            text-align: center;
+            padding: 20px;
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            overflow-x: hidden;
+            overflow-y: auto;
+            transition: background 0.5s ease, color 0.5s ease;
+        }
+        body.dark-mode {
+            background: #1a1a2e;
+            color: #e0e0e0;
+        }
+        .container {
+            max-width: 420px;
+            background: white;
+            color: #333;
+            padding: 30px;
+            border-radius: 18px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.25);
+            animation: fadeIn 1s ease-out, float 3s infinite alternate;
+            transition: background 0.5s ease, color 0.5s ease, box-shadow 0.5s ease;
+            position: relative;
+        }
+        .dark-mode .container {
+            background: #282a36;
+            color: #e0e0e0;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.6);
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-30px) scale(0.95); }
+            to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        @keyframes float {
+            from { transform: translateY(0); }
+            to { transform: translateY(-10px); }
+        }
+        h1 {
+            color: #29b6f6;
+            margin-bottom: 25px;
+            animation: slideInDown 0.8s cubic-bezier(0.25,0.46,0.45,0.94);
+            transition: color 0.5s ease;
+        }
+        .dark-mode h1 {
+            color: #80deea;
+        }
+        @keyframes slideInDown {
+            from { transform: translateY(-80px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+        label {
+            display: block;
+            margin-bottom: 10px;
+            font-weight: bold;
+            color: #555;
+            text-align: left;
+            animation: fadeInUp 0.6s ease-out;
+            transition: color 0.5s ease;
+        }
+        .dark-mode label {
+            color: #bdbdbd;
+        }
+        @keyframes fadeInUp {
+            from { transform: translateY(30px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+        input[type="text"],
+        input[type="date"],
+        input[type="number"],
+        input[type="time"],
+        select {
+            width: calc(100% - 24px);
+            padding: 14px;
+            margin-bottom: 18px;
+            border: 2px solid #a7d9f7;
+            border-radius: 10px;
+            font-size: 17px;
+            transition: border-color 0.4s ease, box-shadow 0.4s ease, background-color 0.4s ease, color 0.4s ease;
+            background-color: #f8f8f8;
+            color: #333;
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            appearance: none;
+        }
+        .dark-mode input[type="text"],
+        .dark-mode input[type="date"],
+        .dark-mode input[type="number"],
+        .dark-mode input[type="time"],
+        .dark-mode select {
+            border-color: #4dd0e1;
+            background-color: #3b3e4f;
+            color: #e0e0e0;
+        }
+        input[type="text"]:focus,
+        input[type="date"]:focus,
+        input[type="number"]:focus,
+        input[type="time"]:focus,
+        select:focus {
+            border-color: #03a9f4;
+            outline: none;
+            box-shadow: 0 5px 15px rgba(3,169,244,0.4);
+        }
+        .dark-mode input[type="text"]:focus,
+        .dark-mode input[type="date"]:focus,
+        .dark-mode input[type="number"]:focus,
+        .dark-mode input[type="time"]:focus,
+        .dark-mode select:focus {
+            box-shadow: 0 5px 15px rgba(77,208,225,0.6);
+        }
+        button {
+            cursor: pointer;
+            border: none;
+            border-radius: 10px;
+            background-color: #03a9f4;
+            color: white;
+            padding: 14px 25px;
+            font-size: 19px;
+            margin-top: 15px;
+            transition: transform 0.3s ease-in-out, background-color 0.4s ease, box-shadow 0.4s ease, color 0.4s ease;
+            animation: pulseButton 2.5s infinite alternate, popIn 0.6s ease-out;
+            font-weight: 600;
+            margin-right: 10px;
+        }
+        button:last-child {
+            margin-right: 0;
+        }
+        .dark-mode button {
+            background-color: #4dd0e1;
+            color: #1a1a2e;
+        }
+        @keyframes pulseButton {
+            0% { transform: scale(1); box-shadow: 0 6px 12px rgba(0,169,244,0.2); }
+            50% { transform: scale(1.03); box-shadow: 0 8px 16px rgba(0,169,244,0.3); }
+            100% { transform: scale(1); box-shadow: 0 6px 12px rgba(0,169,244,0.2); }
+        }
+        @keyframes popIn {
+            from { transform: scale(0.8); opacity: 0; }
+            to { transform: scale(1); opacity: 1; }
+        }
+        button:hover {
+            transform: translateY(-5px) scale(1.05);
+            background-color: #0288d1;
+            box-shadow: 0 8px 18px rgba(0,0,0,0.2);
+        }
+        .dark-mode button:hover {
+            transform: translateY(-5px) scale(1.05);
+            background-color: #00bcd4;
+            box-shadow: 0 8px 18px rgba(0,0,0,0.4);
+        }
+        #summary {
+            margin-top: 30px;
+            padding: 20px;
+            background: #e1f5fe;
+            color: #444;
+            border-radius: 12px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+            animation: slideInUp 0.8s cubic-bezier(0.25,0.46,0.45,0.94);
+            transition: background 0.5s ease, color 0.5s ease, box-shadow 0.5s ease;
+        }
+        .dark-mode #summary {
+            background: #3b3e4f;
+            color: #d0d0d0;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.4);
+        }
+        #summary p {
+            margin: 10px 0;
+            color: #555;
+            opacity: 0;
+            animation: fadeInText 0.8s ease-out forwards;
+            transition: color 0.5s ease;
+        }
+        .dark-mode #summary p {
+            color: #bdbdbd;
+        }
+        @keyframes fadeInText {
+            from { opacity: 0; transform: translateX(-10px); }
+            to { transform: translateX(0); opacity: 1; }
+        }
+        #summary p:nth-child(1) { animation-delay: 0.3s; }
+        #summary p:nth-child(2) { animation-delay: 0.5s; }
+        #summary p:nth-child(3) { animation-delay: 0.7s; }
+        #summary strong {
+            color: #03a9f4;
+            transition: color 0.5s ease;
+        }
+        .dark-mode #summary strong {
+            color: #4dd0e1;
+        }
+        .glass {
+            width: 140px;
+            height: 280px;
+            margin: 30px auto;
+            border: 5px solid #03a9f4;
+            border-radius: 15px;
+            position: relative;
+            overflow: hidden;
+            background: #e0f7fa;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.2);
+            animation: tiltGlass 2s ease-in-out infinite alternate, bounceGlass 1s ease-out;
+            transition: border-color 0.5s ease, background-color 0.5s ease, box-shadow 0.5s ease;
+        }
+        .dark-mode .glass {
+            border-color: #4dd0e1;
+            background: #282a36;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.6);
+        }
+        @keyframes tiltGlass {
+            from { transform: rotate(-3deg); }
+            to { transform: rotate(3deg); }
+        }
+        @keyframes bounceGlass {
+            0% { transform: translateY(-20px); opacity: 0; }
+            60% { transform: translateY(5px); opacity: 1; }
+            100% { transform: translateY(0); opacity: 1; }
+        }
+        .water {
+            position: absolute;
+            bottom: 0;
+            width: 100%;
+            background: linear-gradient(to bottom, #81c784, #4dd0e1);
+            height: 0%;
+            border-radius: 0 0 13px 13px;
+            transition: height 1s ease-out, background 0.5s ease;
+            animation: waterRipple 0.8s ease-in-out infinite alternate;
+        }
+        .dark-mode .water {
+            background: linear-gradient(to bottom, #66bb6a, #26c6da);
+        }
+        @keyframes waterRipple {
+            from { transform: scaleX(1); }
+            to { transform: scaleX(1.02); }
+        }
+
+        .hidden {
+            display: none;
+        }
+        #completed {
+            font-weight: bold;
+            color: #03a9f4;
+            transition: color 0.5s ease;
+        }
+        .dark-mode #completed {
+            color: #4dd0e1;
+        }
+        .sleep-section {
+            margin-top: 25px;
+            padding: 20px;
+            background: #e8f5e9;
+            color: #333;
+            border-radius: 12px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+            animation: slideInUp 0.9s cubic-bezier(0.25,0.46,0.45,0.94);
+            transition: background 0.5s ease, color 0.5s ease, box-shadow 0.5s ease;
+        }
+        .dark-mode .sleep-section {
+            background: #383e4f;
+            color: #d0d0d0;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.4);
+        }
+        #sleepSummary {
+            padding: 15px;
+            margin-top: 18px;
+            background: #c8e6c9;
+            color: #388e3c;
+            border-radius: 10px;
+            font-weight: bold;
+            animation: fadeIn 1s ease-out;
+            transition: background 0.5s ease, color 0.5s ease;
+        }
+        .dark-mode #sleepSummary {
+            background: #4db6ac;
+            color: #1a1a2e;
+        }
+        .time-buttons-container {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            margin-top: 20px;
+        }
+        .time-button {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background-color: #f0f4f8;
+            color: #444;
+            border-radius: 10px;
+            padding: 14px 18px;
+            cursor: pointer;
+            transition: all 0.4s ease, background-color 0.4s ease, color 0.4s ease;
+            animation: popInItem 0.5s ease-out forwards;
+            opacity: 0;
+        }
+        .time-button:nth-child(1) { animation-delay: 0.1s; }
+        .time-button:nth-child(2) { animation-delay: 0.2s; }
+        .time-button:nth-child(3) { animation-delay: 0.3s; }
+        .time-button:nth-child(4) { animation-delay: 0.4s; }
+        .time-button:nth-child(5) { animation-delay: 0.5s; }
+        .time-button:nth-child(6) { animation-delay: 0.6s; }
+        .time-button:nth-child(7) { animation-delay: 0.7s; }
+        .time-button:nth-child(8) { animation-delay: 0.8s; }
+
+        @keyframes popInItem {
+            from { transform: scale(0.9); opacity: 0; }
+            to { transform: scale(1); opacity: 1; }
+        }
+
+        .dark-mode .time-button {
+            background-color: #3b3e4f;
+            color: #d0d0d0;
+        }
+        .time-button:hover {
+            background-color: #d7e8ff;
+            transform: translateY(-3px) scale(1.01);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+        .dark-mode .time-button:hover {
+            background-color: #4c5263;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+        }
+        .time-button.completed {
+            background-color: #a5d6a7;
+            color: #2e7d32;
+            animation: completeBounce 0.5s ease-out;
+            pointer-events: none;
+            opacity: 0.9; 
+        }
+        .dark-mode .time-button.completed {
+            background-color: #66bb6a;
+            color: #1a1a2e;
+        }
+        @keyframes completeBounce {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+        .time-button span {
+            font-weight: 600;
+        }
+        .time-button .time {
+            flex: 1;
+            text-align: left;
+        }
+        .time-button .amount {
+            margin-right: 15px;
+            font-size: 0.9em;
+            opacity: 0.8;
+        }
+        .time-button .status {
+            width: 22px;
+            height: 22px;
+            border-radius: 50%;
+            background-color: #ff8a80;
+            transition: all 0.4s ease, background-color 0.4s ease;
+            border: 2px solid rgba(255,138,128,0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+        }
+        .dark-mode .time-button .status {
+            background-color: #e57373;
+            border: 2px solid rgba(229,115,115,0.5);
+        }
+        .time-button.completed .status {
+            background-color: #69f0ae;
+            border-color: #69f0ae;
+            box-shadow: 0 0 8px #69f0ae;
+        }
+        .dark-mode .time-button.completed .status {
+            background-color: #00e676;
+            border-color: #00e676;
+            box-shadow: 0 0 8px #00e676;
+        }
+
+        .time-button.missed {
+            background-color: #ffcdd2; 
+            color: #b71c1c; 
+            opacity: 0.7; 
+            pointer-events: none; 
+            border: 1px solid #ef9a9a; 
+        }
+        .dark-mode .time-button.missed {
+            background-color: #5c0000; 
+            color: #ffcdd2;
+            border-color: #8c0000;
+        }
+        .time-button.missed .status {
+            background-color: #e57373; 
+            border-color: #ef5350;
+            box-shadow: 0 0 8px rgba(229,115,115,0.5);
+        }
+        .dark-mode .time-button.missed .status {
+            background-color: #ef5350; 
+            border-color: #ffcdd2;
+            box-shadow: 0 0 8px rgba(239,83,80,0.8);
+        }
+
+        #modeToggle {
+            background-color: #616161;
+            color: #fff;
+            border: none;
+            border-radius: 50%;
+            width: 45px;
+            height: 45px;
+            font-size: 1.5em;
+            cursor: pointer;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            transition: background-color 0.4s ease, color 0.4s ease, transform 0.2s ease;
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        }
+        .dark-mode #modeToggle {
+            background-color: #e0e0e0;
+            color: #212121;
+        }
+        #modeToggle:focus {
+            outline: none;
+            transform: scale(1.1);
+        }
+        #modeToggle:hover {
+            transform: rotate(15deg);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+        }
+
+        .time-input-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 18px;
+        }
+        .time-input-group input[type="time"] {
+            flex: 1;
+            margin-bottom: 0;
+        }
+        .time-input-group select {
+            width: auto;
+            margin-bottom: 0;
+        }
+
+        #dailyReportSection {
+            margin-top: 20px;
+            padding: 15px;
+            border: 1px solid #ccc;
+            border-radius: 10px;
+            background: #f8f9fa;
+            transition: background 0.5s ease, color 0.5s ease, border-color 0.5s ease;
+        }
+        .dark-mode #dailyReportSection {
+            background: #3b3e4f;
+            border-color: #555;
+            color: #d0d0d0;
+        }
+
+        #historySection {
+            margin-top: 20px;
+            padding: 15px;
+            border: 1px solid #ccc;
+            border-radius: 10px;
+            background: #f8f9fa;
+            transition: background 0.5s ease, color 0.5s ease, border-color 0.5s ease;
+        }
+        .dark-mode #historySection {
+            background: #3b3e4f;
+            border-color: #555;
+            color: #d0d0d0;
+        }
+
+        .history-button {
+            display: block;
+            width: 100%;
+            margin-bottom: 10px;
+            padding: 10px;
+            background-color: #e3f2fd;
+            border: 1px solid #bbdefb;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+        .dark-mode .history-button {
+            background-color: #455a64;
+            border-color: #607d8b;
+            color: #e0e0e0;
+        }
+        .history-button:hover {
+            background-color: #bbdefb;
+        }
+        .dark-mode .history-button:hover {
+            background-color: #546e7a;
+        }
+        /* Custom Modal for Alerts */
+        .modal {
+            display: none; /* Hidden by default */
+            position: fixed; /* Stay in place */
+            z-index: 1000; /* Sit on top */
+            left: 0;
+            top: 0;
+            width: 100%; /* Full width */
+            height: 100%; /* Full height */
+            overflow: auto; /* Enable scroll if needed */
+            background-color: rgba(0,0,0,0.6); /* Black w/ opacity */
+            animation: fadeInModal 0.3s ease-out;
+        }
+        @keyframes fadeInModal {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        .modal-content {
+            background-color: #fefefe;
+            color: #333;
+            margin: 15% auto; /* 15% from the top and centered */
+            padding: 25px;
+            border: 1px solid #888;
+            width: 80%; /* Could be more or less, depending on screen size */
+            max-width: 380px;
+            border-radius: 15px;
+            text-align: center;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+            animation: slideInModal 0.4s cubic-bezier(0.25,0.46,0.45,0.94);
+        }
+         @keyframes slideInModal {
+            from { transform: translateY(-50px) scale(0.95); opacity: 0;}
+            to { transform: translateY(0) scale(1); opacity: 1;}
+        }
+        .dark-mode .modal-content {
+            background-color: #282a36;
+            color: #e0e0e0;
+            border-color: #555;
+        }
+        .modal-close-button {
+            background-color: #03a9f4;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-top: 20px;
+            transition: background-color 0.3s ease;
+        }
+        .dark-mode .modal-close-button {
+            background-color: #4dd0e1;
+            color: #1a1a2e;
+        }
+        .modal-close-button:hover {
+            background-color: #0288d1;
+        }
+        .dark-mode .modal-close-button:hover {
+            background-color: #00bcd4;
+        }
+
+        @media (max-width: 600px) {
+            .container {
+                max-width: 90%;
+                padding: 20px;
+            }
+            h1 {
+                font-size: 1.8em;
+            }
+            button {
+                width: 100%;
+                padding: 12px;
+                font-size: 16px;
+                margin-right: 0;
+                margin-bottom: 10px;
+            }
+            button:last-of-type {
+                margin-bottom: 0;
+            }
+            .time-button {
+                flex-direction: column;
+                align-items: flex-start;
+                padding: 10px 15px;
+            }
+            .time-button .amount {
+                margin-right: 0;
+                margin-top: 5px;
+            }
+            .time-button .status {
+                align-self: flex-end;
+                margin-top: -25px;
+            }
+            .time-input-group {
+                flex-direction: column;
+                gap: 5px;
+            }
+            .time-input-group input[type="time"],
+            .time-input-group select {
+                width: calc(100% - 24px);
+                margin-bottom: 0;
+            }
+            .modal-content {
+                width: 90%;
+                margin: 25% auto;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <button id="modeToggle">🌙</button>
+        <h1>Hydration Tracker</h1>
+
+        <form id="user-input-form">
+            <label for="name">Name:</label>
+            <input type="text" id="name" placeholder="Enter your name" required>
+
+            <label for="dob">Date of Birth:</label>
+            <input type="date" id="dob" required>
+
+            <label for="height">Height (cm):</label>
+            <input type="number" id="height" placeholder="e.g., 170" step="0.1" required>
+
+            <label for="weight">Weight (kg):</label>
+            <input type="number" id="weight" placeholder="e.g., 70" step="0.1" required>
+
+            <div class="sleep-section">
+                <h3>Sleep Information</h3>
+                <label for="bedTime">What time did you go to bed?</label>
+                <div class="time-input-group">
+                    <input type="time" id="bedTime" required>
+                    <select id="bedTimeAmPm">
+                        <option value="am">AM</option>
+                        <option value="pm">PM</option>
+                    </select>
+                </div>
+                <label for="wakeTime">What time did you wake up?</label>
+                <div class="time-input-group">
+                    <input type="time" id="wakeTime" required>
+                    <select id="wakeTimeAmPm">
+                        <option value="am">AM</option>
+                        <option value="pm">PM</option>
+                    </select>
+                </div>
+                <div id="sleepSummary"></div>
+            </div>
+
+            <button type="button" id="calculateBtn">Calculate Goal</button>
+        </form>
+
+        <div id="summary" class="hidden">
+            <p><strong>Hello, <span id="displayName"></span>!</strong></p>
+            <p><strong>💧Your Daily Goal:</strong> <span id="dailyGoal"></span></p>
+            <p><strong>🥛Each Serving:</strong> <span id="servingSize"></span></p>
+            <p><strong>✅ Servings Drank:</strong> <span id="completed"></span>/8</p>
+
+            <div class="glass">
+                <div class="water" id="waterLevel"></div>
+            </div>
+            <div id="timeButtons" class="time-buttons-container">
+            </div>
+            <button type="button" id="resetBtn">🔄Reset Tracker🔄</button>
+            <button type="button" id="showHistoryBtn">📅View History</button>
+        </div>
+
+        <div id="dailyReportSection" class="hidden">
+            <h2>Daily Hydration Report</h2>
+            <p><strong>Total Goal:</strong> <span id="totalGoal">--</span> ml</p>
+            <p><strong>Water Consumed:</strong> <span id="waterConsumed">--</span> ml</p>
+            <p><strong>Water Missed:</strong> <span id="waterMissed">--</span> ml</p>
+            <p><strong>Servings:</strong> <span id="servingsCompletedDisplay">--</span> completed / <span id="servingsMissed">--</span> missed</p>
+            <p><strong>Missed Due to Time:</strong> <span id="missedDueToTime">--</span></p>
+            <div>
+                <strong>Completed Times:</strong>
+                <ul id="completionTimestamps"></ul>
+            </div>
+        </div>
+
+        <div id="historySection" class="hidden">
+            <h2>📅Historical Logs</h2>
+            <div id="historyList">
+            </div>
+            <div id="historyDetails" class="hidden">
+                <h3>📋Report for <span id="selectedDate"></span></h3>
+                <p><strong>💧Goal:</strong> <span id="historyGoal"></span></p>
+                <p><strong>🥛Total Intake:</strong> <span id="historyTotalIntake"></span></p>
+                <p><strong>✅ Servings Drank:</strong> <span id="historyCompleted"></span>/8</p>
+                <p><strong>🕓Times:</strong> <span id="historyTimes"></span></p>
+                <p><strong>💬Feedback:</strong> <span id="historyFeedback"></span></p>
+                <button type="button" onclick="hideHistoryDetails()">❌ Hide Details</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="customAlertModal" class="modal">
+        <div class="modal-content">
+            <p id="customAlertMessage"></p>
+            <button id="customAlertCloseButton" class="modal-close-button">OK</button>
+        </div>
+    </div>
+
+    <script>
+        let totalMl = 0;
+
+        let servingSize = 0;
+
+        let servingsCompleted = 0;
+
+        let userName = '';
+
+        const maxServings = 8;
+
+        const waterLevelDiv = document.getElementById('waterLevel');
+
+        const summaryDiv = document.getElementById('summary');
+
+        const timeButtonsContainer = document.getElementById('timeButtons');
+
+        const modeToggle = document.getElementById('modeToggle');
+
+        const body = document.body;
+
+        const calculateButton = document.getElementById('calculateBtn');
+
+        const resetButton = document.getElementById('resetBtn');
+
+        const dailyReportSection = document.getElementById('dailyReportSection');
+
+        const showHistoryButton = document.getElementById('showHistoryBtn');
+
+        let notificationPermissionGranted = false;
+
+        let scheduledNotifications = []; // To keep track of scheduled notification timeouts
+
+
+        // Custom Alert Function
+
+        const customAlertModal = document.getElementById('customAlertModal');
+
+        const customAlertMessage = document.getElementById('customAlertMessage');
+
+        const customAlertCloseButton = document.getElementById('customAlertCloseButton');
+
+
+        function showAlert(message) {
+
+            customAlertMessage.textContent = message;
+
+            customAlertModal.style.display = 'block';
+
+        }
+
+
+        customAlertCloseButton.onclick = function() {
+
+            customAlertModal.style.display = 'none';
+
+        }
+
+        // Close modal if user clicks outside of it
+
+        window.onclick = function(event) {
+
+            if (event.target == customAlertModal) {
+
+                customAlertModal.style.display = 'none';
+
+            }
+
+        }
+
+
+
+        // --- Notification Functions ---
+
+        function requestNotificationPermission() {
+
+            if (!("Notification" in window)) {
+
+                showAlert("This browser does not support desktop notification.");
+
+            } else if (Notification.permission === "granted") {
+
+                notificationPermissionGranted = true;
+
+            } else if (Notification.permission !== "denied") {
+
+                Notification.requestPermission().then(function (permission) {
+
+                    if (permission === "granted") {
+
+                        notificationPermissionGranted = true;
+
+                    }
+
+                });
+
+            }
+
+        }
+
+
+        function scheduleNotification(time, title, bodyText) {
+
+            if (!notificationPermissionGranted) return;
+
+
+            const now = new Date().getTime();
+
+            const scheduledTime = new Date(time).getTime();
+
+            const delay = scheduledTime - now;
+
+
+            if (delay > 0) {
+
+               const timeoutId = setTimeout(() => {
+
+                    // Check if this serving was already completed
+
+                    const todayKey = `hydrationProgress_${new Date().toISOString().split('T')[0]}`;
+
+                    const progress = JSON.parse(localStorage.getItem(todayKey)) || { servingsCompleted:0, clickedTimes: [] };
+
+                    const isCompleted = progress.clickedTimes.includes(new Date(time).toISOString());
+
+
+                    if(!isCompleted){
+
+                        const notification = new Notification(title, {
+
+                            body: bodyText,
+
+                            icon: 'https://placehold.co/48x48/03A9F4/FFFFFF?text=💧' // A simple water drop icon
+
+                        });
+
+                    }
+
+                }, delay);
+
+                scheduledNotifications.push(timeoutId); // Store timeout ID to clear later if needed
+
+            }
+
+        }
+
+        
+
+        function clearAllScheduledNotifications() {
+
+            scheduledNotifications.forEach(timeoutId => clearTimeout(timeoutId));
+
+            scheduledNotifications = [];
+
+        }
+
+
+
+        // Toggle dark/light mode
+
+        modeToggle.addEventListener('click', () => {
+
+            body.classList.toggle('dark-mode');
+
+            modeToggle.textContent = body.classList.contains('dark-mode') ? '☀️' : '🌙';
+
+        });
+
+
+        function formatTime(date) {
+
+            const hours = date.getHours();
+
+            const minutes = date.getMinutes();
+
+            const ampm = hours >= 12 ? 'PM' : 'AM';
+
+            const displayHour = hours % 12 === 0 ? 12 : hours % 12;
+
+            return `${String(displayHour).padStart(2, '0')}:${String(minutes).padStart(2, '0')} ${ampm}`;
+
+        }
+
+
+        function loadUserData() {
+
+            const savedData = JSON.parse(localStorage.getItem('userData'));
+
+            if (savedData) {
+
+                document.getElementById('name').value = savedData.name || '';
+
+                document.getElementById('dob').value = savedData.dob || '';
+
+                document.getElementById('height').value = savedData.height || '';
+
+                document.getElementById('weight').value = savedData.weight || '';
+
+                document.getElementById('bedTime').value = savedData.bedTime || '';
+
+                document.getElementById('bedTimeAmPm').value = savedData.bedTimeAmPm || 'am';
+
+                document.getElementById('wakeTime').value = savedData.wakeTime || '';
+
+                document.getElementById('wakeTimeAmPm').value = savedData.wakeTimeAmPm || 'am';
+
+                calculateWater();
+
+            } else {
+
+                document.getElementById('user-input-form').classList.remove('hidden');
+
+                summaryDiv.classList.add('hidden');
+
+                dailyReportSection.classList.add('hidden');
+
+                document.getElementById('historySection').classList.add('hidden');
+
+            }
+
+        }
+
+
+        function showDailyReport(totalGoalMl, totalServings, scheduledTimes) {
+
+            const today = new Date().toISOString().split('T')[0];
+
+            const key = `hydrationProgress_${today}`;
+
+            const data = JSON.parse(localStorage.getItem(key)) || { servingsCompleted: 0, clickedTimes: [] };
+
+
+            const currentServingsCompleted = data.clickedTimes.length;
+
+            const waterConsumed = Math.round((totalGoalMl / totalServings) * currentServingsCompleted);
+
+            const waterMissedVal = totalGoalMl - waterConsumed;
+
+            const servingsMissedVal = totalServings - currentServingsCompleted;
+
+
+            const now = new Date();
+
+            const missedDueToTimeVal = scheduledTimes.filter(timeIso => {
+
+                const scheduledDate = new Date(timeIso);
+
+                const currentServingIndex = scheduledTimes.indexOf(timeIso);
+
+                // Determine the end of the window for this serving. It's either the next serving's time or end of day.
+
+                const nextServingTimeForThisWindow = (currentServingIndex + 1 < totalServings) ?
+
+                    new Date(scheduledTimes[currentServingIndex + 1]) :
+
+                    new Date(new Date(scheduledDate).setHours(23, 59, 59, 999)); // End of day if last serving
+
+
+                return !data.clickedTimes.includes(timeIso) && now >= nextServingTimeForThisWindow;
+
+            }).length;
+
+
+
+            document.getElementById('totalGoal').innerText = totalGoalMl;
+
+            document.getElementById('waterConsumed').innerText = waterConsumed;
+
+            document.getElementById('waterMissed').innerText = waterMissedVal;
+
+            document.getElementById('servingsCompletedDisplay').innerText = currentServingsCompleted;
+
+            document.getElementById('servingsMissed').innerText = servingsMissedVal;
+
+            document.getElementById('missedDueToTime').innerText = missedDueToTimeVal;
+
+
+            const list = document.getElementById('completionTimestamps');
+
+            list.innerHTML = '';
+
+
+            if (data.clickedTimes.length > 0) {
+
+                data.clickedTimes.sort((a, b) => new Date(a) - new Date(b)).forEach(timestamp => {
+
+                    const li = document.createElement('li');
+
+                    li.innerText = new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+                    list.appendChild(li);
+
+                });
+
+            } else {
+
+                const li = document.createElement('li');
+
+                li.innerText = "No servings completed yet.";
+
+                list.appendChild(li);
+
+            }
+
+            dailyReportSection.classList.remove('hidden');
+
+        }
+
+
+        function hideDailyReport() {
+
+            dailyReportSection.classList.add('hidden');
+
+            document.getElementById('completionTimestamps').innerHTML = '';
+
+        }
+
+
+        function saveToHistory(data) {
+
+            const today = new Date().toLocaleDateString();
+
+            const logs = JSON.parse(localStorage.getItem("hydrationLogs") || "{}");
+
+            logs[today] = data;
+
+            localStorage.setItem("hydrationLogs", JSON.stringify(logs));
+
+        }
+
+
+        function showHistory() {
+
+            const historySection = document.getElementById("historySection");
+
+            const historyList = document.getElementById("historyList");
+
+            const logs = JSON.parse(localStorage.getItem("hydrationLogs") || "{}");
+
+
+            historySection.classList.remove("hidden");
+
+            document.getElementById("historyDetails").classList.add("hidden");
+
+            historyList.innerHTML = "";
+
+
+            if (Object.keys(logs).length === 0) {
+
+                historyList.innerHTML = "<p>No history data available yet.</p>";
+
+                return;
+
+            }
+
+
+            Object.keys(logs).sort((a,b) => new Date(b.split('/').reverse().join('-')) - new Date(a.split('/').reverse().join('-')) ).forEach(date => { // Sort by date descending
+
+                const btn = document.createElement("button");
+
+                btn.innerText = date;
+
+                btn.className = 'history-button';
+
+                btn.onclick = () => showHistoryDetail(date, logs[date]);
+
+                historyList.appendChild(btn);
+
+            });
+
+
+            summaryDiv.classList.add('hidden');
+
+            document.getElementById('user-input-form').classList.add('hidden');
+
+            hideDailyReport();
+
+        }
+
+        
+
+        function hideHistoryDetails() {
+
+            document.getElementById("historyDetails").classList.add("hidden");
+
+        }
+
+
+
+        function showHistoryDetail(date, data) {
+
+            document.getElementById("selectedDate").innerText = date;
+
+            document.getElementById("historyGoal").innerText = data.goal + " ml";
+
+            document.getElementById("historyTotalIntake").innerText = data.intake + " ml";
+
+            document.getElementById("historyCompleted").innerText = data.servings;
+
+            document.getElementById("historyTimes").innerText = data.times.join(", ");
+
+            document.getElementById("historyFeedback").innerText = data.feedback || "N/A";
+
+            document.getElementById("historyDetails").classList.remove("hidden");
+
+        }
+
+
+        function hideHistory() { // Renamed from previous hideHistory to avoid conflict if needed, or ensure it's the main one
+
+            document.getElementById("historySection").classList.add("hidden");
+
+            // Decide what to show when history is hidden.
+
+            // If user data exists, show summary. Otherwise, show form.
+
+             if (localStorage.getItem('userData')) {
+
+                summaryDiv.classList.remove('hidden');
+
+                document.getElementById('user-input-form').classList.add('hidden');
+
+            } else {
+
+                document.getElementById('user-input-form').classList.remove('hidden');
+
+                summaryDiv.classList.add('hidden');
+
+            }
+
+        }
+
+
+
+        function updateAndSaveTodayData(totalGoal, currentServings) {
+
+            const today = new Date().toISOString().split('T')[0];
+
+            const key = `hydrationProgress_${today}`;
+
+            const data = JSON.parse(localStorage.getItem(key)) || { servingsCompleted: 0, clickedTimes: [] };
+
+
+            const waterConsumed = Math.round((totalGoal / maxServings) * currentServings);
+
+            const feedback = currentServings >= maxServings ? "Great job today! You crushed your goal!" : "Keep going, you can do it!";
+
+
+            const historyData = {
+
+                goal: totalGoal,
+
+                intake: waterConsumed,
+
+                servings: currentServings,
+
+                times: data.clickedTimes.map(ts => new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })),
+
+                feedback: feedback
+
+            };
+
+            saveToHistory(historyData);
+
+        }
+
+
+        function calculateWater() {
+
+            clearAllScheduledNotifications(); // Clear any previous notifications
+
+
+            const name = document.getElementById('name').value.trim();
+
+            const dob = document.getElementById('dob').value;
+
+            const height = parseFloat(document.getElementById('height').value);
+
+            const weight = parseFloat(document.getElementById('weight').value);
+
+            const bedTime = document.getElementById('bedTime').value;
+
+            const bedTimeAmPm = document.getElementById('bedTimeAmPm').value;
+
+            const wakeTime = document.getElementById('wakeTime').value;
+
+            const wakeTimeAmPm = document.getElementById('wakeTimeAmPm').value;
+
+
+            if (!name || !dob || !Number.isFinite(height) || !Number.isFinite(weight) || !bedTime || !wakeTime) {
+
+                showAlert('Please fill out all personal and sleep information.');
+
+                return;
+
+            }
+
+
+            const userData = {
+
+                name, dob, height, weight, bedTime, bedTimeAmPm, wakeTime, wakeTimeAmPm
+
+            };
+
+            localStorage.setItem('userData', JSON.stringify(userData));
+
+
+            userName = name;
+
+            totalMl = Math.round(weight * 35);
+
+            servingSize = Math.round(totalMl / maxServings);
+
+
+            const { awakeHours, wakeDate } = getAwakeDuration(wakeTime, wakeTimeAmPm, bedTime, bedTimeAmPm);
+
+
+            const today = new Date().toISOString().split('T')[0];
+
+            const key = `hydrationProgress_${today}`;
+
+            const savedProgress = JSON.parse(localStorage.getItem(key)) || { servingsCompleted: 0, clickedTimes: [] };
+
+            servingsCompleted = savedProgress.clickedTimes.length;
+
+
+            document.getElementById('displayName').innerText = userName;
+
+            document.getElementById('dailyGoal').innerText = `${totalMl} ml`;
+
+            document.getElementById('servingSize').innerText = `${servingSize} ml`;
+
+            document.getElementById('completed').innerText = servingsCompleted;
+
+            summaryDiv.classList.remove('hidden');
+
+            document.getElementById('user-input-form').classList.add('hidden');
+
+
+            waterLevelDiv.style.height = `${(servingsCompleted / maxServings) * 100}%`;
+
+            timeButtonsContainer.innerHTML = '';
+
+
+            const scheduledTimesArray = [];
+
+            const now = new Date();
+
+
+            for (let i = 0; i < maxServings; i++) {
+
+                const newButton = document.createElement('div');
+
+                newButton.className = 'time-button';
+
+                const drinkTimeDate = calculateDrinkTime(wakeDate, awakeHours, i, maxServings);
+
+                const formattedTime = formatTime(drinkTimeDate);
+
+
+                newButton.dataset.time = drinkTimeDate.toISOString();
+
+                scheduledTimesArray.push(drinkTimeDate.toISOString());
+
+
+                newButton.innerHTML = `<span class="time">${formattedTime}</span><span class="amount">${servingSize}ml</span><span class="status"></span>`;
+
+                
+
+                // Schedule notification for this serving
+
+                scheduleNotification(drinkTimeDate, 'Hydration Reminder!', `Time for your ${servingSize}ml glass of water, ${userName}!`);
+
+
+
+                const isCompleted = savedProgress.clickedTimes.includes(drinkTimeDate.toISOString());
+
+                if (isCompleted) {
+
+                    newButton.classList.add('completed');
+
+                    newButton.querySelector('.status').innerText = '✔️';
+
+                }
+
+
+                const nextDrinkTimeDate = (i + 1 < maxServings) ? calculateDrinkTime(wakeDate, awakeHours, i + 1, maxServings) : new Date(new Date(drinkTimeDate).setHours(23,59,59,999));
+
+                const canClick = !isCompleted && now >= drinkTimeDate && now < nextDrinkTimeDate;
+
+                const isMissed = !isCompleted && now >= nextDrinkTimeDate;
+
+
+                if (isMissed) {
+
+                    newButton.classList.add('missed');
+
+                    newButton.querySelector('.status').innerText = '❌';
+
+                }
+
+
+                if (canClick) {
+
+                    newButton.addEventListener('click', function() { // Use function to preserve 'this' as the button
+
+                        const clickedTime = this.dataset.time;
+
+                        const todayKey = `hydrationProgress_${new Date().toISOString().split('T')[0]}`;
+
+                        const progress = JSON.parse(localStorage.getItem(todayKey)) || { servingsCompleted: 0, clickedTimes: [] };
+
+                        
+
+                        const currentClickTime = new Date();
+
+                        const clickedDrinkDate = new Date(clickedTime);
+
+                        // Find the index of the clicked button to determine its original scheduled index
+
+                        let clickedIndex = -1;
+
+                        const allButtons = Array.from(timeButtonsContainer.children);
+
+                        for(let k=0; k < allButtons.length; k++){
+
+                            if(allButtons[k].dataset.time === clickedTime) {
+
+                                clickedIndex = k;
+
+                                break;
+
+                            }
+
+                        }
+
+                        
+
+                        const nextServingForClicked = (clickedIndex + 1 < maxServings) ? calculateDrinkTime(wakeDate, awakeHours, clickedIndex + 1, maxServings) : new Date(new Date(clickedDrinkDate).setHours(23,59,59,999));
+
+
+
+                        if (currentClickTime >= clickedDrinkDate && currentClickTime < nextServingForClicked && !progress.clickedTimes.includes(clickedTime)) {
+
+                            progress.servingsCompleted++;
+
+                            progress.clickedTimes.push(clickedTime);
+
+                            localStorage.setItem(todayKey, JSON.stringify(progress));
+
+
+                            servingsCompleted = progress.servingsCompleted;
+
+                            document.getElementById('completed').innerText = servingsCompleted;
+
+                            waterLevelDiv.style.height = `${(servingsCompleted / maxServings) * 100}%`;
+
+                            this.classList.remove('missed');
+
+                            this.classList.add('completed');
+
+                            this.querySelector('.status').innerText = '✔️';
+
+                            this.style.pointerEvents = 'none'; // Make unclickable after completion
+
+
+                            updateAndSaveTodayData(totalMl, servingsCompleted);
+
+                            showDailyReport(totalMl, maxServings, scheduledTimesArray);
+
+
+                            if (servingsCompleted >= maxServings) {
+
+                                showAlert(`Congratulations ${userName}! You have reached your daily hydration goal!`);
+
+                            }
+
+                        } else if (this.classList.contains('missed') || currentClickTime >= nextServingForClicked) {
+
+                            showAlert('You cannot log this serving. Its time window has passed.');
+
+                        } else if (progress.clickedTimes.includes(clickedTime)) {
+
+                            showAlert('You have already logged this serving.');
+
+                        }
+
+                    });
+
+                } else {
+
+                     if(!isCompleted) newButton.style.cursor = 'default'; // Only if not completed
+
+                }
+
+
+                timeButtonsContainer.appendChild(newButton);
+
+            }
+
+
+            displaySleepSummary(bedTime, bedTimeAmPm, wakeTime, wakeTimeAmPm, awakeHours);
+
+            showDailyReport(totalMl, maxServings, scheduledTimesArray);
+
+            updateAndSaveTodayData(totalMl, servingsCompleted);
+
+        }
+
+
+        function getAwakeDuration(wakeTime, wakeTimeAmPm, bedTime, bedTimeAmPm) {
+
+            const bedTimeIn24 = convertTo24Hour(bedTime, bedTimeAmPm);
+
+            const wakeTimeIn24 = convertTo24Hour(wakeTime, wakeTimeAmPm);
+
+
+            const now = new Date();
+
+            let startAwake = new Date(now);
+
+            startAwake.setHours(parseInt(wakeTimeIn24.split(':')[0]), parseInt(wakeTimeIn24.split(':')[1]), 0, 0);
+
+
+            let endAwake = new Date(now);
+
+            endAwake.setHours(parseInt(bedTimeIn24.split(':')[0]), parseInt(bedTimeIn24.split(':')[1]), 0, 0);
+
+
+            if (endAwake < startAwake) {
+
+                endAwake.setDate(endAwake.getDate() + 1);
+
+            }
+
+
+            const awakeDurationMs = endAwake - startAwake;
+
+            const awakeHours = Math.max(1, Math.round(awakeDurationMs / (1000 * 60 * 60))); // Ensure at least 1 awake hour
+
+
+            return { awakeHours, wakeDate: startAwake };
+
+        }
+
+
+        function convertTo24Hour(time, ampm) {
+
+            let [hours, minutes] = time.split(':');
+
+            hours = parseInt(hours, 10);
+
+            if (ampm.toLowerCase() === 'pm' && hours < 12) hours += 12;
+
+            if (ampm.toLowerCase() === 'am' && hours === 12) hours = 0; // Midnight case
+
+            return `${String(hours).padStart(2, '0')}:${minutes}`;
+
+        }
+
+
+        function calculateDrinkTime(wakeDate, awakeHours, servingIndex, totalServings) {
+
+            // Ensure at least 1 interval even if totalServings is 1, to avoid division by zero or negative intervals.
+
+            const numberOfIntervals = Math.max(1, totalServings);
+
+            const interval = awakeHours / numberOfIntervals; // Distribute servings throughout the awake hours
+
+            const drinkTime = new Date(wakeDate);
+
+             // Start first serving a bit after waking up, not immediately.
+
+            // And subsequent servings are based on the interval from the wakeDate.
+
+            drinkTime.setMinutes(drinkTime.getMinutes() + (interval * 60 * (servingIndex + 0.5))); // Add 0.5 to distribute more evenly
+
+            return drinkTime;
+
+        }
+
+        
+
+        function resetDay() {
+
+            // Custom Confirm
+
+            const modal = document.getElementById('customAlertModal');
+
+            const message = document.getElementById('customAlertMessage');
+
+            const closeButton = document.getElementById('customAlertCloseButton');
+
+            
+
+            message.innerHTML = 'Are you sure you want to reset all data? This will clear your progress and user information. <br><br> <button id="confirmResetYes" class="modal-close-button" style="margin-right: 10px;">Yes, Reset</button> <button id="confirmResetNo" class="modal-close-button">No</button>';
+
+            modal.style.display = 'block';
+
+
+            document.getElementById('confirmResetYes').onclick = () => {
+
+                clearAllScheduledNotifications(); // Clear notifications on reset
+
+                totalMl = 0;
+
+                servingSize = 0;
+
+                servingsCompleted = 0;
+
+                waterLevelDiv.style.height = '0%';
+
+                timeButtonsContainer.innerHTML = '';
+
+                summaryDiv.classList.add('hidden');
+
+                document.getElementById('name').value = '';
+
+                document.getElementById('dob').value = '';
+
+                document.getElementById('height').value = '';
+
+                document.getElementById('weight').value = '';
+
+                document.getElementById('bedTime').value = '';
+
+                document.getElementById('bedTimeAmPm').value = 'am';
+
+                document.getElementById('wakeTime').value = '';
+
+                document.getElementById('wakeTimeAmPm').value = 'am';
+
+                localStorage.removeItem('userData');
+
+                const today = new Date().toISOString().split('T')[0];
+
+                localStorage.removeItem(`hydrationProgress_${today}`);
+
+                // Optionally clear all hydrationLogs if a full reset is intended
+
+                // localStorage.removeItem('hydrationLogs');
+
+                document.getElementById('sleepSummary').innerHTML = '';
+
+                hideDailyReport();
+
+                hideHistory();
+
+                document.getElementById('user-input-form').classList.remove('hidden');
+
+                modal.style.display = 'none';
+
+            };
+
+            document.getElementById('confirmResetNo').onclick = () => {
+
+                modal.style.display = 'none';
+
+            };
+
+        }
+
+
+
+        function displaySleepSummary(bedTime, bedTimeAmPm, wakeTime, wakeTimeAmPm, awakeHours) {
+
+            const sleepSummaryDiv = document.getElementById('sleepSummary');
+
+            sleepSummaryDiv.innerHTML = `<p>You went to bed at ${bedTime} ${bedTimeAmPm.toUpperCase()} and woke up at ${wakeTime} ${wakeTimeAmPm.toUpperCase()}. You are awake for approximately ${awakeHours} hours today.</p>`;
+
+        }
+
+
+        calculateButton.addEventListener('click', calculateWater);
+
+        resetButton.addEventListener('click', resetDay);
+
+        showHistoryButton.addEventListener('click', showHistory);
+
+
+        window.addEventListener('DOMContentLoaded', () => {
+		
+            requestNotificationPermission(); // Request permission on load
+
+            loadUserData();
+
+        }); 
+    </script>
+</body>
+</html>
