@@ -1,0 +1,1011 @@
+import React, { useState, useEffect, useRef } from 'react';
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  ScrollView,
+  StyleSheet,
+  Alert,
+  Modal,
+  Animated,
+  Platform,
+  StatusBar,
+  Dimensions,
+} from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { LinearGradient } from 'expo-linear-gradient';
+import * as Notifications from 'expo-notifications';
+import DateTimePicker from '@react-native-community/datetimepicker';
+
+const { width, height } = Dimensions.get('window');
+
+// Configure notifications
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldSetBadge: false,
+  }),
+});
+
+const HydrationTracker = () => {
+  // State variables
+  const [totalMl, setTotalMl] = useState(0);
+  const [servingSize, setServingSize] = useState(0);
+  const [servingsCompleted, setServingsCompleted] = useState(0);
+  const [userName, setUserName] = useState('');
+  const [isDarkMode, setIsDarkMode] = useState(false);
+  const [showForm, setShowForm] = useState(true);
+  const [showHistory, setShowHistory] = useState(false);
+  const [showHistoryDetails, setShowHistoryDetails] = useState(false);
+  
+  // Form data
+  const [formData, setFormData] = useState({
+    name: '',
+    dob: new Date(),
+    height: '',
+    weight: '',
+    bedTime: new Date(),
+    wakeTime: new Date(),
+  });
+  
+  // UI state
+  const [showDatePicker, setShowDatePicker] = useState({ show: false, field: '' });
+  const [timeButtons, setTimeButtons] = useState([]);
+  const [dailyReport, setDailyReport] = useState({});
+  const [historyData, setHistoryData] = useState([]);
+  const [selectedHistoryItem, setSelectedHistoryItem] = useState(null);
+  
+  // Animations
+  const waterLevelAnimation = useRef(new Animated.Value(0)).current;
+  const containerAnimation = useRef(new Animated.Value(0)).current;
+  
+  const maxServings = 8;
+
+  useEffect(() => {
+    loadUserData();
+    requestNotificationPermission();
+    
+    // Animate container on mount
+    Animated.spring(containerAnimation, {
+      toValue: 1,
+      useNativeDriver: true,
+      tension: 50,
+      friction: 7
+    }).start();
+  }, []);
+
+  useEffect(() => {
+    // Animate water level changes
+    Animated.spring(waterLevelAnimation, {
+      toValue: (servingsCompleted / maxServings) * 100,
+      useNativeDriver: false,
+      tension: 50,
+      friction: 7
+    }).start();
+  }, [servingsCompleted]);
+
+  const requestNotificationPermission = async () => {
+    const { status } = await Notifications.requestPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission needed', 'Notification permission is required for hydration reminders.');
+    }
+  };
+
+  const scheduleNotification = async (time, title, body) => {
+    const now = new Date().getTime();
+    const scheduledTime = new Date(time).getTime();
+    const delay = scheduledTime - now;
+
+    if (delay > 0) {
+      await Notifications.scheduleNotificationAsync({
+        content: {
+          title,
+          body,
+          sound: true,
+        },
+        trigger: { seconds: Math.floor(delay / 1000) },
+      });
+    }
+  };
+
+  const loadUserData = async () => {
+    try {
+      const savedData = await AsyncStorage.getItem('userData');
+      if (savedData) {
+        const userData = JSON.parse(savedData);
+        setFormData({
+          ...userData,
+          dob: new Date(userData.dob),
+          bedTime: new Date(userData.bedTime),
+          wakeTime: new Date(userData.wakeTime),
+        });
+        calculateWater(userData);
+      }
+    } catch (error) {
+      console.error('Error loading user data:', error);
+    }
+  };
+
+  const saveUserData = async (data) => {
+    try {
+      await AsyncStorage.setItem('userData', JSON.stringify(data));
+    } catch (error) {
+      console.error('Error saving user data:', error);
+    }
+  };
+
+  const calculateWater = async (userData = formData) => {
+    const { name, weight, bedTime, wakeTime } = userData;
+    
+    if (!name || !weight || !bedTime || !wakeTime) {
+      Alert.alert('Missing Information', 'Please fill out all required fields.');
+      return;
+    }
+
+    const weightNum = parseFloat(weight);
+    if (!weightNum || weightNum <= 0) {
+      Alert.alert('Invalid Weight', 'Please enter a valid weight.');
+      return;
+    }
+
+    setUserName(name);
+    const totalMlCalc = Math.round(weightNum * 35);
+    const servingSizeCalc = Math.round(totalMlCalc / maxServings);
+    
+    setTotalMl(totalMlCalc);
+    setServingSize(servingSizeCalc);
+
+    const { awakeHours, wakeDate } = getAwakeDuration(wakeTime, bedTime);
+    
+    // Load today's progress
+    const today = new Date().toISOString().split('T')[0];
+    try {
+      const savedProgress = await AsyncStorage.getItem(`hydrationProgress_${today}`);
+      const progress = savedProgress ? JSON.parse(savedProgress) : { servingsCompleted: 0, clickedTimes: [] };
+      setServingsCompleted(progress.clickedTimes.length);
+      
+      // Generate time buttons
+      const buttons = [];
+      const scheduledTimes = [];
+      const now = new Date();
+      
+      for (let i = 0; i < maxServings; i++) {
+        const drinkTime = calculateDrinkTime(wakeDate, awakeHours, i, maxServings);
+        const timeIso = drinkTime.toISOString();
+        scheduledTimes.push(timeIso);
+        
+        const isCompleted = progress.clickedTimes.includes(timeIso);
+        const nextDrinkTime = (i + 1 < maxServings) 
+          ? calculateDrinkTime(wakeDate, awakeHours, i + 1, maxServings)
+          : new Date(new Date(drinkTime).setHours(23, 59, 59, 999));
+        
+        const canClick = !isCompleted && now >= drinkTime && now < nextDrinkTime;
+        const isMissed = !isCompleted && now >= nextDrinkTime;
+        
+        buttons.push({
+          id: i,
+          time: drinkTime,
+          timeIso,
+          formattedTime: formatTime(drinkTime),
+          isCompleted,
+          canClick,
+          isMissed,
+          servingSize: servingSizeCalc,
+        });
+        
+        // Schedule notification
+        if (!isCompleted) {
+          await scheduleNotification(
+            drinkTime,
+            'Hydration Reminder!',
+            `Time for your ${servingSizeCalc}ml glass of water, ${name}!`
+          );
+        }
+      }
+      
+      setTimeButtons(buttons);
+      generateDailyReport(totalMlCalc, progress.clickedTimes.length, scheduledTimes);
+      
+      await saveUserData(userData);
+      setShowForm(false);
+      
+    } catch (error) {
+      console.error('Error calculating water:', error);
+    }
+  };
+
+  const getAwakeDuration = (wakeTime, bedTime) => {
+    const now = new Date();
+    const wakeDate = new Date(now);
+    wakeDate.setHours(wakeTime.getHours(), wakeTime.getMinutes(), 0, 0);
+    
+    const bedDate = new Date(now);
+    bedDate.setHours(bedTime.getHours(), bedTime.getMinutes(), 0, 0);
+    
+    if (bedDate < wakeDate) {
+      bedDate.setDate(bedDate.getDate() + 1);
+    }
+    
+    const awakeDurationMs = bedDate - wakeDate;
+    const awakeHours = Math.max(1, Math.round(awakeDurationMs / (1000 * 60 * 60)));
+    
+    return { awakeHours, wakeDate };
+  };
+
+  const calculateDrinkTime = (wakeDate, awakeHours, servingIndex, totalServings) => {
+    const interval = awakeHours / Math.max(1, totalServings);
+    const drinkTime = new Date(wakeDate);
+    drinkTime.setMinutes(drinkTime.getMinutes() + (interval * 60 * (servingIndex + 0.5)));
+    return drinkTime;
+  };
+
+  const formatTime = (date) => {
+    const hours = date.getHours();
+    const minutes = date.getMinutes();
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    const displayHour = hours % 12 === 0 ? 12 : hours % 12;
+    return `${String(displayHour).padStart(2, '0')}:${String(minutes).padStart(2, '0')} ${ampm}`;
+  };
+
+  const handleServingClick = async (buttonId) => {
+    const button = timeButtons[buttonId];
+    if (!button.canClick) return;
+
+    const today = new Date().toISOString().split('T')[0];
+    try {
+      const savedProgress = await AsyncStorage.getItem(`hydrationProgress_${today}`);
+      const progress = savedProgress ? JSON.parse(savedProgress) : { servingsCompleted: 0, clickedTimes: [] };
+      
+      if (!progress.clickedTimes.includes(button.timeIso)) {
+        progress.servingsCompleted++;
+        progress.clickedTimes.push(button.timeIso);
+        await AsyncStorage.setItem(`hydrationProgress_${today}`, JSON.stringify(progress));
+        
+        setServingsCompleted(progress.clickedTimes.length);
+        
+        // Update button state
+        const updatedButtons = timeButtons.map(btn => 
+          btn.id === buttonId ? { ...btn, isCompleted: true, canClick: false } : btn
+        );
+        setTimeButtons(updatedButtons);
+        
+        await saveToHistory();
+        
+        if (progress.clickedTimes.length >= maxServings) {
+          Alert.alert('Congratulations!', `${userName}! You have reached your daily hydration goal!`);
+        }
+      }
+    } catch (error) {
+      console.error('Error handling serving click:', error);
+    }
+  };
+
+  const generateDailyReport = (totalGoalMl, currentServings, scheduledTimes) => {
+    const waterConsumed = Math.round((totalGoalMl / maxServings) * currentServings);
+    const waterMissed = totalGoalMl - waterConsumed;
+    const servingsMissed = maxServings - currentServings;
+    
+    setDailyReport({
+      totalGoal: totalGoalMl,
+      waterConsumed,
+      waterMissed,
+      servingsCompleted: currentServings,
+      servingsMissed,
+    });
+  };
+
+  const saveToHistory = async () => {
+    try {
+      const today = new Date().toLocaleDateString();
+      const logs = await AsyncStorage.getItem('hydrationLogs');
+      const parsedLogs = logs ? JSON.parse(logs) : {};
+      
+      const waterConsumed = Math.round((totalMl / maxServings) * servingsCompleted);
+      const feedback = servingsCompleted >= maxServings ? 
+        "Great job today! You crushed your goal!" : 
+        "Keep going, you can do it!";
+      
+      parsedLogs[today] = {
+        goal: totalMl,
+        intake: waterConsumed,
+        servings: servingsCompleted,
+        feedback,
+      };
+      
+      await AsyncStorage.setItem('hydrationLogs', JSON.stringify(parsedLogs));
+    } catch (error) {
+      console.error('Error saving to history:', error);
+    }
+  };
+
+  const loadHistory = async () => {
+    try {
+      const logs = await AsyncStorage.getItem('hydrationLogs');
+      if (logs) {
+        const parsedLogs = JSON.parse(logs);
+        const historyArray = Object.keys(parsedLogs).map(date => ({
+          date,
+          ...parsedLogs[date]
+        })).sort((a, b) => new Date(b.date) - new Date(a.date));
+        setHistoryData(historyArray);
+      }
+      setShowHistory(true);
+      setShowForm(false);
+    } catch (error) {
+      console.error('Error loading history:', error);
+    }
+  };
+
+  const resetTracker = () => {
+    Alert.alert(
+      'Reset Tracker',
+      'Are you sure you want to reset all data? This will clear your progress and user information.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Reset',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await AsyncStorage.clear();
+              setFormData({
+                name: '',
+                dob: new Date(),
+                height: '',
+                weight: '',
+                bedTime: new Date(),
+                wakeTime: new Date(),
+              });
+              setTotalMl(0);
+              setServingSize(0);
+              setServingsCompleted(0);
+              setUserName('');
+              setTimeButtons([]);
+              setShowForm(true);
+              setShowHistory(false);
+              setShowHistoryDetails(false);
+            } catch (error) {
+              console.error('Error resetting tracker:', error);
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  const renderForm = () => (
+    <ScrollView style={styles.formContainer}>
+      <Text style={[styles.title, isDarkMode && styles.titleDark]}>
+        Hydration Tracker
+      </Text>
+      
+      <View style={styles.inputGroup}>
+        <Text style={[styles.label, isDarkMode && styles.labelDark]}>Name:</Text>
+        <TextInput
+          style={[styles.input, isDarkMode && styles.inputDark]}
+          value={formData.name}
+          onChangeText={(text) => setFormData({...formData, name: text})}
+          placeholder="Enter your name"
+          placeholderTextColor={isDarkMode ? '#888' : '#666'}
+        />
+      </View>
+
+      <View style={styles.inputGroup}>
+        <Text style={[styles.label, isDarkMode && styles.labelDark]}>Date of Birth:</Text>
+        <TouchableOpacity
+          style={[styles.dateButton, isDarkMode && styles.dateButtonDark]}
+          onPress={() => setShowDatePicker({show: true, field: 'dob'})}
+        >
+          <Text style={[styles.dateButtonText, isDarkMode && styles.dateButtonTextDark]}>
+            {formData.dob.toLocaleDateString()}
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      <View style={styles.inputGroup}>
+        <Text style={[styles.label, isDarkMode && styles.labelDark]}>Height (cm):</Text>
+        <TextInput
+          style={[styles.input, isDarkMode && styles.inputDark]}
+          value={formData.height}
+          onChangeText={(text) => setFormData({...formData, height: text})}
+          placeholder="e.g., 170"
+          keyboardType="numeric"
+          placeholderTextColor={isDarkMode ? '#888' : '#666'}
+        />
+      </View>
+
+      <View style={styles.inputGroup}>
+        <Text style={[styles.label, isDarkMode && styles.labelDark]}>Weight (kg):</Text>
+        <TextInput
+          style={[styles.input, isDarkMode && styles.inputDark]}
+          value={formData.weight}
+          onChangeText={(text) => setFormData({...formData, weight: text})}
+          placeholder="e.g., 70"
+          keyboardType="numeric"
+          placeholderTextColor={isDarkMode ? '#888' : '#666'}
+        />
+      </View>
+
+      <View style={[styles.sleepSection, isDarkMode && styles.sleepSectionDark]}>
+        <Text style={[styles.sleepTitle, isDarkMode && styles.sleepTitleDark]}>
+          Sleep Information
+        </Text>
+        
+        <View style={styles.inputGroup}>
+          <Text style={[styles.label, isDarkMode && styles.labelDark]}>Bed Time:</Text>
+          <TouchableOpacity
+            style={[styles.dateButton, isDarkMode && styles.dateButtonDark]}
+            onPress={() => setShowDatePicker({show: true, field: 'bedTime'})}
+          >
+            <Text style={[styles.dateButtonText, isDarkMode && styles.dateButtonTextDark]}>
+              {formatTime(formData.bedTime)}
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.inputGroup}>
+          <Text style={[styles.label, isDarkMode && styles.labelDark]}>Wake Time:</Text>
+          <TouchableOpacity
+            style={[styles.dateButton, isDarkMode && styles.dateButtonDark]}
+            onPress={() => setShowDatePicker({show: true, field: 'wakeTime'})}
+          >
+            <Text style={[styles.dateButtonText, isDarkMode && styles.dateButtonTextDark]}>
+              {formatTime(formData.wakeTime)}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      <TouchableOpacity
+        style={[styles.button, styles.calculateButton]}
+        onPress={() => calculateWater()}
+      >
+        <Text style={styles.buttonText}>Calculate Goal</Text>
+      </TouchableOpacity>
+    </ScrollView>
+  );
+
+  const renderWaterGlass = () => (
+    <View style={[styles.glassContainer, isDarkMode && styles.glassContainerDark]}>
+      <View style={[styles.glass, isDarkMode && styles.glassDark]}>
+        <Animated.View
+          style={[
+            styles.water,
+            isDarkMode && styles.waterDark,
+            {
+              height: waterLevelAnimation.interpolate({
+                inputRange: [0, 100],
+                outputRange: ['0%', '100%'],
+                extrapolate: 'clamp',
+              }),
+            },
+          ]}
+        />
+      </View>
+    </View>
+  );
+
+  const renderTimeButtons = () => (
+    <View style={styles.timeButtonsContainer}>
+      {timeButtons.map((button) => (
+        <TouchableOpacity
+          key={button.id}
+          style={[
+            styles.timeButton,
+            isDarkMode && styles.timeButtonDark,
+            button.isCompleted && styles.timeButtonCompleted,
+            button.isMissed && styles.timeButtonMissed,
+            (button.isCompleted || button.isMissed) && styles.timeButtonDisabled,
+          ]}
+          onPress={() => handleServingClick(button.id)}
+          disabled={!button.canClick}
+        >
+          <View style={styles.timeButtonContent}>
+            <Text style={[styles.timeButtonTime, isDarkMode && styles.timeButtonTextDark]}>
+              {button.formattedTime}
+            </Text>
+            <Text style={[styles.timeButtonAmount, isDarkMode && styles.timeButtonTextDark]}>
+              {button.servingSize}ml
+            </Text>
+            <View style={[
+              styles.timeButtonStatus,
+              button.isCompleted && styles.timeButtonStatusCompleted,
+              button.isMissed && styles.timeButtonStatusMissed,
+            ]}>
+              <Text style={styles.timeButtonStatusText}>
+                {button.isCompleted ? '✔️' : button.isMissed ? '❌' : ''}
+              </Text>
+            </View>
+          </View>
+        </TouchableOpacity>
+      ))}
+    </View>
+  );
+
+  const renderSummary = () => (
+    <Animated.View
+      style={[
+        styles.summaryContainer,
+        { transform: [{ scale: containerAnimation }] }
+      ]}
+    >
+      <ScrollView>
+        <View style={[styles.summary, isDarkMode && styles.summaryDark]}>
+          <Text style={[styles.greeting, isDarkMode && styles.greetingDark]}>
+            Hello, {userName}!
+          </Text>
+          <Text style={[styles.goalText, isDarkMode && styles.goalTextDark]}>
+            💧 Your Daily Goal: {totalMl} ml
+          </Text>
+          <Text style={[styles.servingText, isDarkMode && styles.servingTextDark]}>
+            🥛 Each Serving: {servingSize} ml
+          </Text>
+          <Text style={[styles.progressText, isDarkMode && styles.progressTextDark]}>
+            ✅ Servings Drank: {servingsCompleted}/{maxServings}
+          </Text>
+
+          {renderWaterGlass()}
+          {renderTimeButtons()}
+
+          <View style={styles.buttonContainer}>
+            <TouchableOpacity
+              style={[styles.button, styles.resetButton]}
+              onPress={resetTracker}
+            >
+              <Text style={styles.buttonText}>🔄 Reset Tracker 🔄</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.button, styles.historyButton]}
+              onPress={loadHistory}
+            >
+              <Text style={styles.buttonText}>📅 View History</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </ScrollView>
+    </Animated.View>
+  );
+
+  const renderHistory = () => (
+    <ScrollView style={styles.historyContainer}>
+      <Text style={[styles.title, isDarkMode && styles.titleDark]}>
+        📅 Historical Logs
+      </Text>
+      
+      {historyData.length === 0 ? (
+        <Text style={[styles.noHistoryText, isDarkMode && styles.noHistoryTextDark]}>
+          No history data available yet.
+        </Text>
+      ) : (
+        historyData.map((item, index) => (
+          <TouchableOpacity
+            key={index}
+            style={[styles.historyItem, isDarkMode && styles.historyItemDark]}
+            onPress={() => {
+              setSelectedHistoryItem(item);
+              setShowHistoryDetails(true);
+            }}
+          >
+            <Text style={[styles.historyItemText, isDarkMode && styles.historyItemTextDark]}>
+              {item.date}
+            </Text>
+          </TouchableOpacity>
+        ))
+      )}
+
+      <TouchableOpacity
+        style={[styles.button, styles.backButton]}
+        onPress={() => {
+          setShowHistory(false);
+          setShowForm(false);
+        }}
+      >
+        <Text style={styles.buttonText}>← Back to Tracker</Text>
+      </TouchableOpacity>
+    </ScrollView>
+  );
+
+  const renderHistoryDetails = () => (
+    <Modal
+      animationType="slide"
+      transparent={true}
+      visible={showHistoryDetails}
+      onRequestClose={() => setShowHistoryDetails(false)}
+    >
+      <View style={styles.modalOverlay}>
+        <View style={[styles.modalContent, isDarkMode && styles.modalContentDark]}>
+          <Text style={[styles.modalTitle, isDarkMode && styles.modalTitleDark]}>
+            📋 Report for {selectedHistoryItem?.date}
+          </Text>
+          
+          <Text style={[styles.modalText, isDarkMode && styles.modalTextDark]}>
+            💧 Goal: {selectedHistoryItem?.goal} ml
+          </Text>
+          <Text style={[styles.modalText, isDarkMode && styles.modalTextDark]}>
+            🥛 Total Intake: {selectedHistoryItem?.intake} ml
+          </Text>
+          <Text style={[styles.modalText, isDarkMode && styles.modalTextDark]}>
+            ✅ Servings Drank: {selectedHistoryItem?.servings}/{maxServings}
+          </Text>
+          <Text style={[styles.modalText, isDarkMode && styles.modalTextDark]}>
+            💬 Feedback: {selectedHistoryItem?.feedback}
+          </Text>
+
+          <TouchableOpacity
+            style={[styles.button, styles.closeButton]}
+            onPress={() => setShowHistoryDetails(false)}
+          >
+            <Text style={styles.buttonText}>❌ Close</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
+
+  return (
+    <LinearGradient
+      colors={isDarkMode ? ['#1a1a2e', '#16213e'] : ['#e0f7fa', '#cdd8f1']}
+      style={styles.container}
+    >
+      <StatusBar
+        barStyle={isDarkMode ? 'light-content' : 'dark-content'}
+        backgroundColor={isDarkMode ? '#1a1a2e' : '#e0f7fa'}
+      />
+      
+      <TouchableOpacity
+        style={[styles.modeToggle, isDarkMode && styles.modeToggleDark]}
+        onPress={() => setIsDarkMode(!isDarkMode)}
+      >
+        <Text style={styles.modeToggleText}>
+          {isDarkMode ? '☀️' : '🌙'}
+        </Text>
+      </TouchableOpacity>
+
+      {showForm && renderForm()}
+      {!showForm && !showHistory && renderSummary()}
+      {showHistory && renderHistory()}
+      {renderHistoryDetails()}
+
+      {showDatePicker.show && (
+        <DateTimePicker
+          value={formData[showDatePicker.field] || new Date()}
+          mode={showDatePicker.field === 'dob' ? 'date' : 'time'}
+          is24Hour={false}
+          display="default"
+          onChange={(event, selectedDate) => {
+            setShowDatePicker({show: false, field: ''});
+            if (selectedDate) {
+              setFormData({
+                ...formData,
+                [showDatePicker.field]: selectedDate
+              });
+            }
+          }}
+        />
+      )}
+    </LinearGradient>
+  );
+};
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    paddingTop: Platform.OS === 'ios' ? 44 : StatusBar.currentHeight,
+  },
+  formContainer: {
+    flex: 1,
+    padding: 20,
+  },
+  summaryContainer: {
+    flex: 1,
+    padding: 20,
+  },
+  historyContainer: {
+    flex: 1,
+    padding: 20,
+  },
+  modeToggle: {
+    position: 'absolute',
+    top: Platform.OS === 'ios' ? 54 : (StatusBar.currentHeight + 10),
+    right: 20,
+    width: 45,
+    height: 45,
+    borderRadius: 22.5,
+    backgroundColor: '#616161',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1000,
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+  },
+  modeToggleDark: {
+    backgroundColor: '#e0e0e0',
+  },
+  modeToggleText: {
+    fontSize: 20,
+  },
+  title: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#29b6f6',
+    textAlign: 'center',
+    marginBottom: 25,
+    marginTop: 60,
+  },
+  titleDark: {
+    color: '#80deea',
+  },
+  inputGroup: {
+    marginBottom: 18,
+  },
+  label: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#555',
+    marginBottom: 8,
+  },
+  labelDark: {
+    color: '#bdbdbd',
+  },
+  input: {
+    borderWidth: 2,
+    borderColor: '#a7d9f7',
+    borderRadius: 10,
+    padding: 14,
+    fontSize: 16,
+    backgroundColor: '#f8f8f8',
+    color: '#333',
+  },
+  inputDark: {
+    borderColor: '#4dd0e1',
+    backgroundColor: '#3b3e4f',
+    color: '#e0e0e0',
+  },
+  dateButton: {
+    borderWidth: 2,
+    borderColor: '#a7d9f7',
+    borderRadius: 10,
+    padding: 14,
+    backgroundColor: '#f8f8f8',
+  },
+  dateButtonDark: {
+    borderColor: '#4dd0e1',
+    backgroundColor: '#3b3e4f',
+  },
+  dateButtonText: {
+    fontSize: 16,
+    color: '#333',
+  },
+  dateButtonTextDark: {
+    color: '#e0e0e0',
+  },
+  sleepSection: {
+    marginTop: 25,
+    padding: 20,
+    backgroundColor: '#e8f5e9',
+    borderRadius: 12,
+    marginBottom: 20,
+  },
+  sleepSectionDark: {
+    backgroundColor: '#383e4f',
+  },
+  sleepTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 15,
+  },
+  sleepTitleDark: {
+    color: '#d0d0d0',
+  },
+  button: {
+    backgroundColor: '#03a9f4',
+    paddingVertical: 14,
+    paddingHorizontal: 25,
+    borderRadius: 10,
+    marginVertical: 8,
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+  },
+  calculateButton: {
+    marginTop: 20,
+  },
+  resetButton: {
+    backgroundColor: '#f44336',
+    marginBottom: 10,
+  },
+  historyButton: {
+    backgroundColor: '#4caf50',
+    marginBottom: 10,
+  },
+  backButton: {
+    backgroundColor: '#757575',
+    marginTop: 20,
+  },
+  closeButton: {
+    backgroundColor: '#03a9f4',
+    marginTop: 20,
+  },
+  buttonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: 'bold',
+    textAlign: 'center',
+  },
+  summary: {
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+        borderRadius: 12,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+  },
+  summaryDark: {
+    backgroundColor: '#424242',
+  },
+  greeting: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#29b6f6',
+    marginBottom: 10,
+  },
+  greetingDark: {
+    color: '#80deea',
+  },
+  goalText: {
+    fontSize: 18,
+    color: '#333',
+  },
+  goalTextDark: {
+    color: '#e0e0e0',
+  },
+  servingText: {
+    fontSize: 18,
+    color: '#333',
+  },
+  servingTextDark: {
+    color: '#e0e0e0',
+  },
+  progressText: {
+    fontSize: 18,
+    color: '#333',
+  },
+  progressTextDark: {
+    color: '#e0e0e0',
+  },
+  glassContainer: {
+    alignItems: 'center',
+    marginVertical: 20,
+  },
+  glass: {
+    width: 100,
+    height: 200,
+    borderWidth: 2,
+    borderColor: '#29b6f6',
+    borderRadius: 10,
+    backgroundColor: 'rgba(41, 182, 246, 0.2)',
+    overflow: 'hidden',
+  },
+  water: {
+    backgroundColor: '#29b6f6',
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+  },
+  timeButtonsContainer: {
+    marginVertical: 20,
+  },
+  timeButton: {
+    backgroundColor: '#03a9f4',
+    padding: 15,
+    borderRadius: 10,
+    marginVertical: 5,
+  },
+  timeButtonDark: {
+    backgroundColor: '#4dd0e1',
+  },
+  timeButtonCompleted: {
+    backgroundColor: '#4caf50',
+  },
+  timeButtonMissed: {
+    backgroundColor: '#f44336',
+  },
+  timeButtonDisabled: {
+    opacity: 0.5,
+  },
+  timeButtonContent: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  timeButtonTime: {
+    fontSize: 16,
+    color: '#fff',
+  },
+  timeButtonAmount: {
+    fontSize: 16,
+    color: '#fff',
+  },
+  timeButtonStatus: {
+    width: 30,
+    height: 30,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  timeButtonStatusCompleted: {
+    backgroundColor: '#4caf50',
+  },
+  timeButtonStatusMissed: {
+    backgroundColor: '#f44336',
+  },
+  timeButtonStatusText: {
+    color: '#fff',
+    fontSize: 18,
+  },
+  modalOverlay: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
+  modalContent: {
+    width: '80%',
+    backgroundColor: 'white',
+    borderRadius: 10,
+    padding: 20,
+    elevation: 5,
+  },
+  modalContentDark: {
+    backgroundColor: '#424242',
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginBottom: 10,
+  },
+  modalTitleDark: {
+    color: '#e0e0e0',
+  },
+  modalText: {
+    fontSize: 16,
+    marginBottom: 10,
+  },
+  modalTextDark: {
+    color: '#e0e0e0',
+  },
+  noHistoryText: {
+    textAlign: 'center',
+    fontSize: 16,
+    color: '#555',
+  },
+  noHistoryTextDark: {
+    color: '#bdbdbd',
+  },
+  historyItem: {
+    padding: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: '#ddd',
+  },
+  historyItemDark: {
+    borderBottomColor: '#555',
+  },
+  historyItemText: {
+    fontSize: 16,
+  },
+  historyItemTextDark: {
+    color: '#e0e0e0',
+  },
+});
+
+export default HydrationTracker;
